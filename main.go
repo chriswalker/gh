@@ -1,10 +1,15 @@
 package main
 
 import (
+	"flag"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
+)
+
+var (
+	token = flag.String("token", "", "Personal Access Token fo Github")
 )
 
 const (
@@ -39,10 +44,15 @@ variables {
 )
 
 func main() {
+	flag.Parse()
+	if *token == "" {
+		log.Fatal("token required")
+	}
+
 	client := &http.Client{}
 
 	req, err := http.NewRequest("POST", GithubQLURL, strings.NewReader(Body))
-	req.Header.Add("Authorization", "bearer "+GithubToken)
+	req.Header.Add("Authorization", "bearer "+*token)
 
 	resp, err := client.Do(req)
 	if err != nil {

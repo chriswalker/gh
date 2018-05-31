@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/shurcooL/githubv4"
 	"github.com/shurcooL/graphql"
 	"golang.org/x/oauth2"
 )
@@ -17,6 +18,34 @@ var (
 const (
 	GithubQLURL = "https://api.github.com/graphql"
 )
+
+type Query struct {
+	Repository `graphql:"repository(owner: $owner, name: $repo)"`
+}
+
+type Repository struct {
+	Object `graphql:"object(expression: $default_branch)"`
+}
+
+type Object struct {
+	Commit `graphql:"... on Commit"`
+}
+
+type Commit struct {
+	History `graphql:"history(first: 10, after: $commit)"`
+}
+
+type History struct {
+	Edges
+}
+
+type Edges struct {
+	Node
+}
+
+type Node struct {
+	Oid, CommitDate, MessageHeadline githubv4.String
+}
 
 func main() {
 	flag.Parse()
@@ -47,13 +76,6 @@ func main() {
 	     }
 	   }
 	*/
-	var query struct {
-		Viewer struct {
-			Login graphql.String
-			Name  graphql.String
-		}
-	}
-
 	vars := map[string]interface{}{
 		"default_branch": "master",
 		"commit":         "4ef34f27fdd5c39d7f3cfb9012251d325c9900e9",
@@ -61,10 +83,11 @@ func main() {
 		"owner":          "chriswalker",
 	}
 
+	query := Query{}
 	// update to pass in vars when ready
-	err := client.Query(context.Background(), &query, nil)
+	err := client.Query(context.Background(), &query, vars)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(query.Viewer)
+	fmt.Println(query)
 }

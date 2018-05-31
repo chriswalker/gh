@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
-	"io/ioutil"
+	"fmt"
 	"log"
-	"net/http"
-	"strings"
+
+	"github.com/shurcooL/graphql"
+	"golang.org/x/oauth2"
 )
 
 var (
@@ -13,34 +15,7 @@ var (
 )
 
 const (
-	GithubToken = "c39cf226885fabfe918911726afec955a900816e"
 	GithubQLURL = "https://api.github.com/graphql"
-	Body        = `{
-		"query": "query ($default_branch: String!, $commit: String!) {
-  repository(owner: \"chriswalker\", name: \"dotfiles\") {
-    object(expression: $default_branch) {
-      ... on Commit {
-        history(first: 10, after: $commit) {
-          edges {
-            node {
-              id
-              committedDate
-              messageHeadline
-            }
-          }
-        }
-      }
-    }
-  }
-}
-
-variables {
-  \"default_branch\": \"master\",
-  \"commit\": \"4ef34f27fdd5c39d7f3cfb9012251d325c9900e9\"
-}"
-	}`
-
-	Body2 = "{ \"query\": \"query { viewer { login } }\" }"
 )
 
 func main() {
@@ -49,21 +24,47 @@ func main() {
 		log.Fatal("token required")
 	}
 
-	client := &http.Client{}
+	src := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: *token})
 
-	req, err := http.NewRequest("POST", GithubQLURL, strings.NewReader(Body))
-	req.Header.Add("Authorization", "bearer "+*token)
+	httpClient := oauth2.NewClient(context.Background(), src)
+	client := graphql.NewClient(GithubQLURL, httpClient)
+	/*
+	   query ($default_branch: String!, $commit: String!) {
+	     repository(owner: "chriswalker", name: "dotfiles") {
+	       object(expression: $default_branch) {
+	         ... on Commit {
+	           history(first: 10, after: $commit) {
+	             edges {
+	               node {
+	                 id
+	                 committedDate
+	                 messageHeadline
+	               }
+	             }
+	           }
+	         }
+	       }
+	     }
+	   }
+	*/
+	var query struct {
+		Viewer struct {
+			Login graphql.String
+			Name  graphql.String
+		}
+	}
 
-	resp, err := client.Do(req)
+	vars := map[string]interface{}{
+		"default_branch": "master",
+		"commit":         "4ef34f27fdd5c39d7f3cfb9012251d325c9900e9",
+		"repo":           "dotfiles",
+		"owner":          "chriswalker",
+	}
+
+	// update to pass in vars when ready
+	err := client.Query(context.Background(), &query, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer resp.Body.Close()
-
-	// else, dump response
-	bytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println(string(bytes))
+	fmt.Println(query.Viewer)
 }

@@ -1,0 +1,4 @@
+package: github.com/chriswalker/gh
+import:
+- package: github.com/shurcooL/graphql
+- package: golang.org/x/oauth2

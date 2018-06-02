@@ -6,18 +6,22 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/fatih/color"
 	"github.com/shurcooL/githubv4"
-	"github.com/shurcooL/graphql"
 	"golang.org/x/oauth2"
 )
 
 var (
-	token = flag.String("token", "", "Personal Access Token fo Github")
+	token  = flag.String("token", "", "Personal Access Token fo Github")
+	commit = flag.String("commit", "", "Commit to search from")
 )
 
 const (
 	GithubQLURL = "https://api.github.com/graphql"
 )
+
+// Alias for fatih/color SprintFunc() returns
+type SprintfFunc func(format string, a ...interface{}) string
 
 type Query struct {
 	Repository `graphql:"repository(owner: $owner, name: $repo)"`
@@ -32,7 +36,7 @@ type Object struct {
 }
 
 type Commit struct {
-	History `graphql:"history(first: 10, after: $commit)"`
+	History `graphql:"history(first: 10)"`
 }
 
 type History struct {
@@ -40,11 +44,11 @@ type History struct {
 }
 
 type Edges struct {
-	Node
+	Nodes []CommitNode
 }
 
-type Node struct {
-	Oid, CommitDate, MessageHeadline githubv4.String
+type CommitNode struct {
+	Oid, CommittedDate, MessageHeadline githubv4.String
 }
 
 func main() {
@@ -52,42 +56,41 @@ func main() {
 	if *token == "" {
 		log.Fatal("token required")
 	}
+	if *commit == "" {
+		log.Fatal("commit required")
+	}
 
 	src := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: *token})
 
 	httpClient := oauth2.NewClient(context.Background(), src)
-	client := graphql.NewClient(GithubQLURL, httpClient)
-	/*
-	   query ($default_branch: String!, $commit: String!) {
-	     repository(owner: "chriswalker", name: "dotfiles") {
-	       object(expression: $default_branch) {
-	         ... on Commit {
-	           history(first: 10, after: $commit) {
-	             edges {
-	               node {
-	                 id
-	                 committedDate
-	                 messageHeadline
-	               }
-	             }
-	           }
-	         }
-	       }
-	     }
-	   }
-	*/
+	client := githubv4.NewClient(httpClient)
+
 	vars := map[string]interface{}{
-		"default_branch": "master",
-		"commit":         "4ef34f27fdd5c39d7f3cfb9012251d325c9900e9",
-		"repo":           "dotfiles",
-		"owner":          "chriswalker",
+		"default_branch": githubv4.String("master"),
+		"repo":           githubv4.String("dotfiles"),
+		"owner":          githubv4.String("chriswalker"),
 	}
 
 	query := Query{}
-	// update to pass in vars when ready
 	err := client.Query(context.Background(), &query, vars)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(query)
+
+	for i, commitNode := range query.Repository.History.Edges.Nodes {
+		oid := commitNode.Oid
+		if commitNode.Oid == githubv4.String(*commit) {
+			fn := GetColourFunc(i)
+			fmt.Printf("Deployed: [%s] %s\n", color.BlueString(*commit), fn("Master: [%s], ahead by %d commits", oid, i))
+		}
+	}
+}
+
+func GetColourFunc(num int) func(format string, a ...interface{}) string {
+	if num < 3 {
+		return color.New(color.FgGreen).SprintfFunc()
+	} else if num < 6 {
+		return color.New(color.FgYellow).SprintfFunc()
+	}
+	return color.New(color.FgRed).SprintfFunc()
 }

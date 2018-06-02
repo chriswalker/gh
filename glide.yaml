@@ -1,4 +1,6 @@
 package: github.com/chriswalker/gh
 import:
-- package: github.com/shurcooL/graphql
+- package: github.com/shurcooL/githubv4
 - package: golang.org/x/oauth2
+- package: github.com/fatih/color
+  version: v1.7.0
